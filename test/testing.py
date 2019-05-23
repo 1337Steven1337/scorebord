@@ -1,6 +1,5 @@
 from DMD import DMD
 from PinLayout import PinLayout
-from random import randint
 import math
 delay = 1
 layout = PinLayout(37, 38, 23, 35, 19, 24)
@@ -8,6 +7,7 @@ dmd = DMD(1, 1, 32, 16, 1, layout)
 displayPixelsWidth = 32
 displayPixelsHeight = 16
 screen = [0 for x in range(64)]
+phase = 0
 
 pixelLookupTable = [
     0x80,  # 0, bit 7
@@ -19,6 +19,7 @@ pixelLookupTable = [
     0x02,  # 6, bit 1
     0x01  # 7, bit 0
 ]
+
 
 def pixel_to_bitmap_index(x, y):
     panel = math.floor(int((x/32))) + math.floor(int((y / 16)))
@@ -38,15 +39,15 @@ def set_pixel(x, y, on):
     else:
         screen[byte_index] |= bit
 
+
 def get_pixel(x, y):
     byte_index = pixel_to_bitmap_index(x, y)
     bit = pixelLookupTable[x & 0x07]
     try:
         return (screen[byte_index] & bit) > 0
     except:
-        print("Requested x,y,got",x,y ,byte_index)
+        print("Requested x,y,got", x, y, byte_index)
         return 0
-
 
 
 def print_screen():
@@ -58,7 +59,23 @@ def print_screen():
         to_print += str(int(get_pixel(x%32, int(math.floor(x / 32))))) + ", "
 
 
-for x in range(16):
-    set_pixel(x, x, True)
+def scan():
+    global phase
+    stride = 4
+    stride4 = 16
+    for x in range(1):
+        offset_pos = (phase + x) * stride
+        b0 = screen[offset_pos + 0]
+        b1 = screen[offset_pos + stride4]
+        b2 = screen[offset_pos + 2 * + stride4]
+        b3 = screen[offset_pos + 3 * + stride4]
+        print([b3, b2, b1, b0])
 
-print_screen()
+    phase = (phase + 1) & 0x03
+
+set_pixel(2, 2, True)
+
+
+while True:
+    for x in range(4):
+        scan()

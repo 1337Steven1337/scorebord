@@ -33,7 +33,7 @@ class DMDBase(object):
     def spi_send(self, byte_array):
         for i in range(len(byte_array)):
             for j in range(7, -1, -1):
-                bit = int((byte_array[i] & (1 << j)) == 0)
+                bit = (byte_array[i] & (1 << j)) == 0
                 self.transfer_bit(bit)
 
     def gpio_out(self, pin, value):

@@ -11,7 +11,7 @@ class DMD(DMDBase):
     displaysHigh = 1
     displaysTotal = 1
     phase = 0
-    screen_size = 0
+    screen_size_bytes = 0
     screen = []
 
     pixelLookupTable = [
@@ -35,10 +35,11 @@ class DMD(DMDBase):
         self.displaysTotal = self.displaysHigh * self.displaysWide
         self.screenWidth = self.displayPixelsWidth * self.displaysWide
         self.screenHeight = self.displayPixelsHeight * self.displaysHigh
+        self.screen_size_pixels = self.screenWidth * self.screenHeight
         self.displayStrideWidth = int(math.floor((self.screenWidth + 7) / 8))
         self.displayStrideHeight = int(math.floor((self.screenHeight + self.displayPixelsHeight - 1) / self.displayPixelsHeight))
-        self.screen_size = self.displayStrideWidth * self.screenHeight
-        self.screen = [0 for x in range(self.displaysTotal * self.screen_size)]
+        self.screen_size_bytes = self.displayStrideWidth * self.screenHeight
+        self.screen = [0 for x in range(self.displaysTotal * self.screen_size_bytes)]
 
     def pixel_to_bitmap_index(self, x, y):
         panel = int(math.floor((x / self.displayPixelsWidth))) + int(math.floor((self.displaysWide * (y / self.displayPixelsHeight))))
@@ -64,7 +65,7 @@ class DMD(DMDBase):
 
     def print_screen(self):
         to_print = ""
-        for x in range(self.screenWidth * self.screenHeight):
+        for x in range(self.screen_size_pixels):
             if (x + 1) % 32 == 0:
                 print(to_print)
                 to_print = ""
@@ -75,26 +76,22 @@ class DMD(DMDBase):
             self.scan()
 
     def scan(self):
-        row_size = self.displayStrideWidth * self.displayStrideHeight
+        row_size = self.displaysTotal << 2
+        offset = row_size * self.phase
         for x in range(row_size):
-            b0 = self.screen[(self.phase + 0) * row_size]
-            b1 = self.screen[(self.phase + 4) * row_size]
-            b2 = self.screen[(self.phase + 8) * row_size]
-            b3 = self.screen[(self.phase + 12) * row_size]
+            off_pos = offset + x
+            b3 = self.screen[off_pos + (((self.displaysTotal << 2) * 3) << 2)]
+            b2 = self.screen[off_pos + (self.displaysTotal << 5)]
+            b1 = self.screen[off_pos + (self.displaysTotal << 4)]
+            b0 = self.screen[off_pos + 0]
             super(DMD, self).spi_send([b3, b2, b1, b0])
 
         super(DMD, self).gpio_out(self.layout.OE, 0)
         super(DMD, self).latch()
-        if self.phase & 0x02:
-            super(DMD, self).gpio_out(self.layout.B, 1)
-        else:
-            super(DMD, self).gpio_out(self.layout.B, 0)
-        if self.phase & 0x01:
-            super(DMD, self).gpio_out(self.layout.A, 1)
-        else:
-            super(DMD, self).gpio_out(self.layout.A, 0)
-
-        self.phase = (self.phase + 1) & 0x03
+        super(DMD, self).gpio_out(self.layout.A, self.phase & 0x01)
+        super(DMD, self).gpio_out(self.layout.B, self.phase & 0x02)
+        self.phase = (self.phase + 1) % 4
         super(DMD, self).gpio_out(self.layout.OE, 1)
+
 
 
