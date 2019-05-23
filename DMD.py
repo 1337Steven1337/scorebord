@@ -25,19 +25,16 @@ class DMD(DMDBase):
            0x01    # 7, bit 0
     ]
 
-    def __init__(self, displayswide, displayshigh, pixelswidth, pixelsheight, bpp, layout):
+    def __init__(self, displayswide, displayshigh, pixelswidth, pixelsheight, layout):
         DMDBase.__init__(self, layout)
         self.displaysWide = displayswide
         self.displaysHigh = displayshigh
         self.displayPixelsWidth = pixelswidth
         self.displayPixelsHeight = pixelsheight
-        self.displayBitsPerPixel = bpp
         self.displaysTotal = self.displaysHigh * self.displaysWide
         self.screenWidth = self.displayPixelsWidth * self.displaysWide
         self.screenHeight = self.displayPixelsHeight * self.displaysHigh
-        self.screen_size_pixels = self.screenWidth * self.screenHeight
         self.displayStrideWidth = int(math.floor((self.screenWidth + 7) / 8))
-        self.displayStrideHeight = int(math.floor((self.screenHeight + self.displayPixelsHeight - 1) / self.displayPixelsHeight))
         self.screen_size_bytes = self.displayStrideWidth * self.screenHeight
         self.screen = [0 for x in range(self.displaysTotal * self.screen_size_bytes)]
 
@@ -65,8 +62,8 @@ class DMD(DMDBase):
 
     def print_screen(self):
         to_print = ""
-        for x in range(self.screen_size_pixels):
-            if (x + 1) % 32 == 0:
+        for x in range(self.screenWidth * self.screenHeight):
+            if x is not 0 and x % 32 == 0:
                 print(to_print)
                 to_print = ""
             to_print += str(int(self.get_pixel(x % self.displayPixelsWidth, int(math.floor(x / self.displayPixelsWidth))))) + ", "
