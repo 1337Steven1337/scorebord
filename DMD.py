@@ -41,30 +41,34 @@ class DMD(DMDBase):
         self.screen = [0 for x in range(self.displaysTotal * self.screen_size)]
 
     def pixel_to_bitmap_index(self, x, y):
-        panel = (x / self.displayPixelsWidth) + (self.displaysWide * (y / self.displayPixelsHeight))
-        x = (x % self.displayPixelsWidth) + (panel << 5)
+        panel = int(math.floor((x / self.displayPixelsWidth))) + int(math.floor((self.displaysWide * (y / self.displayPixelsHeight))))
+        x = (x % self.displayPixelsWidth) + (panel * self.displayPixelsWidth)
         y = y % self.displayPixelsHeight
         res = x / 8 + y * (self.displaysTotal << 2)
-        return res
+        return int(math.floor(res))
 
     def set_pixel(self, x, y, on):
         if x >= self.screenWidth or y >= self.screenHeight:
             return
         byte_index = self.pixel_to_bitmap_index(x, y)
         bit = self.pixelLookupTable[x & 0x07]
-        if on:
+        if not on:
             self.screen[byte_index] &= ~bit
         else:
             self.screen[byte_index] |= bit
 
+    def get_pixel(self, x, y):
+        byte_index = self.pixel_to_bitmap_index(x, y)
+        bit = self.pixelLookupTable[x & 0x07]
+        return (self.screen[byte_index] & bit) > 0
+
     def print_screen(self):
-        for x in range(self.screenHeight):
-            to_print = ""
-            for y in range(self.displayStrideWidth):
-                for z in range(7, -1, -1):
-                    to_print += " ," + str(int(((self.screen[x] & (1 << z)) & 255 > 0)))
-                to_print += " | "
-            print(to_print)
+        to_print = ""
+        for x in range(self.screenWidth * self.screenHeight):
+            if (x + 1) % 32 == 0:
+                print(to_print)
+                to_print = ""
+            to_print += str(int(self.get_pixel(x % self.displayPixelsWidth, int(math.floor(x / self.displayPixelsWidth))))) + ", "
 
     def scan_full(self):
         for x in range(4):
