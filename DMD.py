@@ -1,30 +1,9 @@
 from DMDBase import DMDBase
+from GraphicsMode import GraphicsMode as graphicsmode
 import math
 
 
 class DMD(DMDBase):
-    displayPixelsWidth = 32
-    displayPixelsHeight = 16
-    displayBitsPerPixel = 1
-    displayStrideWidth = 0
-    displaysWide = 1
-    displaysHigh = 1
-    displaysTotal = 1
-    phase = 0
-    screen_size_bytes = 0
-    screen = []
-
-    pixelLookupTable = [
-           0x80,   # 0, bit 7
-           0x40,   # 1, bit 6
-           0x20,   # 2. bit 5
-           0x10,   # 3, bit 4
-           0x08,   # 4, bit 3
-           0x04,   # 5, bit 2
-           0x02,   # 6, bit 1
-           0x01    # 7, bit 0
-    ]
-
     def __init__(self, displayswide, displayshigh, pixelswidth, pixelsheight, layout):
         DMDBase.__init__(self, layout)
         self.displaysWide = displayswide
@@ -37,6 +16,11 @@ class DMD(DMDBase):
         self.displayStrideWidth = int(math.floor((self.screenWidth + 7) / 8))
         self.screen_size_bytes = self.displayStrideWidth * self.screenHeight
         self.screen = [0 for x in range(self.displaysTotal * self.screen_size_bytes)]
+        self.phase = 0
+        self.row_size = self.displaysTotal << 2
+        self.row3 = ((self.displaysTotal << 2) * 3) << 2
+        self.row2 = self.displaysTotal << 5
+        self.row1 = self.displaysTotal << 4
 
     def pixel_to_bitmap_index(self, x, y):
         panel = int(math.floor((x / self.displayPixelsWidth))) + int(math.floor((self.displaysWide * (y / self.displayPixelsHeight))))
@@ -45,19 +29,25 @@ class DMD(DMDBase):
         res = x / 8 + y * (self.displaysTotal << 2)
         return int(math.floor(res))
 
-    def set_pixel(self, x, y, on):
+    def set_pixel(self, x, y, mode):
         if x >= self.screenWidth or y >= self.screenHeight:
             return
         byte_index = self.pixel_to_bitmap_index(x, y)
-        bit = self.pixelLookupTable[x & 0x07]
-        if not on:
+        bit = super(DMD, self).pixelLookupTable[x & 0x07]
+        if mode == graphicsmode.ON:
             self.screen[byte_index] &= ~bit
-        else:
+        elif mode == graphicsmode.OFF:
             self.screen[byte_index] |= bit
+        elif mode == graphicsmode.OR:
+            self.screen[byte_index] = ~(~self.screen[byte_index] | bit)
+        elif mode == graphicsmode.NOR:
+            self.screen[byte_index] = (~self.screen[byte_index] | bit)
+        elif mode == graphicsmode.XOR:
+            self.screen[byte_index] ^= bit
 
     def get_pixel(self, x, y):
         byte_index = self.pixel_to_bitmap_index(x, y)
-        bit = self.pixelLookupTable[x & 0x07]
+        bit = super(DMD, self).pixelLookupTable[x & 0x07]
         return (self.screen[byte_index] & bit) > 0
 
     def print_screen(self):
@@ -73,13 +63,12 @@ class DMD(DMDBase):
             self.scan()
 
     def scan(self):
-        row_size = self.displaysTotal << 2
-        offset = row_size * self.phase
-        for x in range(row_size):
+        offset = self.row_size * self.phase
+        for x in range(self.row_size):
             off_pos = offset + x
-            b3 = self.screen[off_pos + (((self.displaysTotal << 2) * 3) << 2)]
-            b2 = self.screen[off_pos + (self.displaysTotal << 5)]
-            b1 = self.screen[off_pos + (self.displaysTotal << 4)]
+            b3 = self.screen[off_pos + self.row3]
+            b2 = self.screen[off_pos + self.row2]
+            b1 = self.screen[off_pos + self.row1]
             b0 = self.screen[off_pos + 0]
             super(DMD, self).spi_send([b3, b2, b1, b0])
 
@@ -90,5 +79,69 @@ class DMD(DMDBase):
         self.phase = (self.phase + 1) % 4
         super(DMD, self).gpio_out(self.layout.OE, 1)
 
+    def clear_screen(self):
+        self.screen = [0 for x in range(self.displaysTotal * self.screen_size_bytes)]
 
+    def fill_screen(self):
+        self.screen = [255 for x in range(self.displaysTotal * self.screen_size_bytes)]
+
+    def draw_line(self, x1, y1, x2, y2, mode):
+        dy = y2 - y1
+        dx = x2 - x1
+        stepy = 1
+        stepx = 1
+        if dy < 0:
+            dy = -dy
+            stepy = -1
+        if dx < 0:
+            dx = -dx
+            stepx = -1
+        dy *= 2
+        dx *= 2
+        self.set_pixel(x1, y2, mode)
+        if dx > dy:
+            fraction = dy - dx / 2
+            while x1 is not x2:
+                if fraction >= 0:
+                    y1 += stepy
+                    fraction -= dx
+                x1 += stepx
+                fraction += dy
+                self.set_pixel(x1, y1, mode)
+        else:
+            fraction = dx - dy / 2
+            while y1 is not y2:
+                if fraction >= 0:
+                    x1 += stepx
+                    fraction -= dy
+                y1 += stepy
+                fraction += dx
+                self.set_pixel(x1, y1, mode)
+
+    def draw_circle(self, xcenter, ycenter, radius, mode):
+        x = -radius
+        y = 0
+        error = 2 - 2 * radius
+        while x < 0:
+            self.set_pixel(xcenter - x, ycenter + y, mode)
+            self.set_pixel(xcenter - y, ycenter - x, mode)
+            self.set_pixel(xcenter + x, ycenter - y, mode)
+            self.set_pixel(xcenter + y, ycenter + x, mode)
+            radius = error
+            if radius <= y:
+                y += 1
+                error += y * 2 + 1
+            if radius > x or error > y:
+                x += 1
+                error += x * 2 + 1
+
+    def draw_box(self, x1, y1, x2, y2, mode):
+        self.draw_line(x1, y1, x2, y1, mode)
+        self.draw_line(x2, y1, x2, y2, mode)
+        self.draw_line(x2, y2, x1, y2, mode)
+        self.draw_line(x1, y2, x1, y1, mode)
+
+    def draw_filled_box(self, x1, y1, x2, y2, mode):
+        for x in range(x1,x2 + 1):
+            self.draw_line(x, y1 - 1, x, y2, mode)
 

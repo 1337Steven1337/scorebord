@@ -8,6 +8,17 @@ class DMDBase(object):
     spi.open(0, 0)
     spi.max_speed_hz = 250000
 
+    pixelLookupTable = [
+           0x80,   # 0, bit 7
+           0x40,   # 1, bit 6
+           0x20,   # 2. bit 5
+           0x10,   # 3, bit 4
+           0x08,   # 4, bit 3
+           0x04,   # 5, bit 2
+           0x02,   # 6, bit 1
+           0x01    # 7, bit 0
+    ]
+
     def __init__(self, layout):
         GPIO.setmode(GPIO.BOARD)
         GPIO.setup(layout.A, GPIO.OUT)
