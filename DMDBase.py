@@ -1,12 +1,8 @@
 import RPi.GPIO as GPIO
-import spidev
 
 
 class DMDBase(object):
     GPIO.setwarnings(False)
-    spi = spidev.SpiDev()
-    spi.open(0, 0)
-    spi.max_speed_hz = 250000
 
     pixelLookupTable = [
            0x80,   # 0, bit 7
@@ -18,15 +14,14 @@ class DMDBase(object):
            0x02,   # 6, bit 1
            0x01    # 7, bit 0
     ]
-
     def __init__(self, layout):
         GPIO.setmode(GPIO.BOARD)
         GPIO.setup(layout.A, GPIO.OUT)
         GPIO.setup(layout.B, GPIO.OUT)
         GPIO.setup(layout.CLK, GPIO.OUT)
         GPIO.setup(layout.STROBE, GPIO.OUT)
-        GPIO.setup(layout.DATA, GPIO.OUT)
         GPIO.setup(layout.OE, GPIO.OUT)
+        GPIO.setup(7, GPIO.OUT)
         self.layout = layout
 
     def latch(self):
@@ -37,15 +32,16 @@ class DMDBase(object):
         self.gpio_out(self.layout.CLK, 1)
         self.gpio_out(self.layout.CLK, 0)
 
-    def transfer_bit(self, bit):
-        self.gpio_out(self.layout.DATA, bit)
+    def transfer_byte(self, byte):
+	    self.gpio_out(7, byte)
         self.clock()
 
     def spi_send(self, byte_array):
         for i in range(len(byte_array)):
-            for j in range(7, -1, -1):
-                bit = (byte_array[i] & (1 << j)) == 0
-                self.transfer_bit(bit)
+	    for j in range(8):
+		self.transfer_byte((byte_array[i] & (1 << 7)) == 0)
+		byte_array[i] <<= 1
 
     def gpio_out(self, pin, value):
         GPIO.output(pin, value)
+
